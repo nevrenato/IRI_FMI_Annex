@@ -1,0 +1,215 @@
+spec Nat = 
+	free type Nat ::= 0 | suc(Nat)
+end 
+
+spec DCR = 
+    Nat then 
+	
+	%% Beginning of signature translation
+	
+	sorts U 
+	
+	%% sigs
+	preds Event,Mark : U
+
+	%% binary relations
+	preds condition,response,toBeExecuted,executed : U*U
+
+	%% ternary relation
+	preds action : U*U*U
+	
+	%% End of signature
+	
+	%% Beginning of Gamma
+	. not exists u : U . Event(u) /\ Mark (u)
+
+	forall u,u' : U . condition(u,u') => Event(u) /\ Event(u')
+	forall u,u' : U . response(u,u') => Event(u) /\ Event(u')
+	forall u,u' : U . executed(u,u') => Mark(u) /\ Event(u')
+	forall u,u' : U . toBeExecuted(u,u') => Mark(u) /\ Event(u')
+	forall u,v,x : U . action(u,v,x) => Mark(u) /\ Mark(v) /\ Event(x)
+	
+	%% End of Gamma
+
+	
+	%% Definition of predicate action 
+	
+        forall e,m,m' : U . action(m,m',e) <=> 
+	
+		%% e.~condition in m.executed
+		(forall v : U . (exists y : U . e = y /\ condition(v,y)) => 
+			exists y : U . m = y /\ executed(y,v)) /\
+			
+		%% m'.executed = m.executed + e
+		(forall v : U . (exists y : U . m' = y /\ executed(y,v))
+			<=> ((exists y : U . m = y /\ executed(y,v)) \/ e = v)) /\
+		
+		%% m'.toBeExecuted = (m.toBeExecuted - e) + e.response
+		(forall v : U . (exists y : U . m' = y /\ toBeExecuted(y,v))
+			<=> (((exists y : U . m = y /\ toBeExecuted(y,v)) /\ not e = v) \/ 
+					(exists y : U . e = y /\ response(y,v))))	
+		 
+	%% End of definition of predicate action
+		
+	%% refRun
+	. (forall m,m',e : U . Mark(m) /\ Mark(m') /\ Event(e) => 
+		(action(m,m',e) /\ toBeExecuted(m',e) => response(e,e)))
+		%implied %(refRun)%
+
+
+spec CaseStudy =
+	DCR then
+	
+	%% Beggining of signature translation
+	
+	preds PrescribeMed, SignDoc, PrepMed, GiveMed, SecEffect : U
+	
+	%% Beggining of gamma
+	forall u : U . PrescribeMed(u) => Event(u)
+	forall u : U . SignDoc(u) => Event(u)
+	forall u : U . PrepMed(u) => Event(u)
+	forall u : U . GiveMed(u) => Event(u)
+	forall u : U . SecEffect(u) => Event(u)
+	
+	. exists u : U . PrescribeMed(u)
+	. exists u : U . SignDoc(u)
+	. exists u : U . PrepMed(u)
+	. exists u : U . GiveMed(u)
+	. exists u : U . SecEffect(u)
+	
+	forall u,u' : U . PrescribeMed(u) /\ PrescribeMed(u') => u = u'
+	forall u,u' : U . SignDoc(u) /\ SignDoc(u') => u = u'
+	forall u,u' : U . PrepMed(u) /\ PrepMed(u') => u = u'
+	forall u,u' : U . GiveMed(u) /\ GiveMed(u') => u = u'
+	forall u,u' : U . SecEffect(u) /\ SecEffect(u') => u = u'
+	
+	forall u : U . PrescribeMed(u) => 
+		not SignDoc(u) /\ not PrepMed(u) /\ not GiveMed(u) /\ not SecEffect(u)
+	forall u : U . SignDoc(u) => 
+		not PrescribeMed(u) /\ not PrepMed(u) /\ not GiveMed(u) /\ not SecEffect(u)
+	forall u : U . PrepMed(u) => 
+			not SignDoc(u) /\ not PrescribeMed(u) /\ not GiveMed(u) /\ not SecEffect(u)
+	forall u : U . GiveMed(u) => 
+		not SignDoc(u) /\ not PrepMed(u) /\ not PrescribeMed(u)	/\ not SecEffect(u)
+	forall u : U . SecEffect(u) => 
+		not PrepMed(u) /\ not GiveMed(u) /\ not PrescribeMed(u) /\ not SignDoc(u)
+		
+	forall u : U . Event(u) => PrescribeMed(u) \/ SignDoc(u) \/ PrepMed(u) \/ GiveMed(u) \/
+					SecEffect(u)
+	
+	%% transRun
+	preds transRun : Nat*U*U
+	preds transCond : Nat*U*U
+	
+	%% axiomatisation of transRun
+	forall n : Nat . 
+	forall u,u' : U . (transRun(0,u,u') <=> exists y : U . action(u,u',y)) /\
+	(transRun(suc(n),u,u') <=> exists y : U . transRun(0,u,y) /\ transRun(n,y,u'))
+	
+	%% axiomatisation of transCond
+	forall n : Nat . 
+	forall u,u' : U . (transCond(0,u,u') <=> condition(u,u')) /\
+	(transCond(suc(n),u,u') <=> exists y : U . transCond(0,u,y) /\ transCond(n,y,u'))
+	
+	%% End of gamma
+	%% End of signature translation
+	
+	%% no condition.PrescribeMed
+	forall v : U . (exists y : U . condition(v,y) /\ PrescribeMed(y)) => false
+	
+	%% PrescribeMed.response = SignDoc + GiveMed + PrepMed
+	forall v : U . (exists y : U . PrescribeMed(y) /\ response(y,v)) <=>
+					(SignDoc(v) \/ GiveMed(v) \/ PrepMed(v))
+					
+	%% The condition for SignDoc is PrescribeMed
+	forall v : U . (exists y : U . condition(v,y) /\ SignDoc(y)) <=> PrescribeMed(v)
+	
+	%% No SignDoc.response
+	forall v : U . (exists y : U . SignDoc(y) /\ response(y,v)) => false
+		
+	%% The condition for PrepMed is PrescribeMed
+	forall v : U . (exists y : U . condition(v,y) /\ PrepMed(y)) => PrescribeMed(v)
+	
+	%% no PrepMed.response
+	forall v : U . (exists y : U . PrepMed(y) /\ response(y,v)) => false
+	
+	%% condition.GiveMed = SignDoc + PrepMed
+	forall v : U . (exists y : U . condition(v,y) /\ GiveMed(y)) <=> SignDoc(v) \/ PrepMed(v)
+	
+	%% no GiveMed.response
+	forall v : U . (exists y : U . GiveMed(y) /\ response(y,v)) => false
+	
+	%% SecEffect.response = PrescribeMed
+	forall v : U . (exists y : U . SecEffect(y) /\ response(y,v)) <=> PrescribeMed(v)
+	
+	%% condition.SecEffect = GiveMed
+	forall v : U . (exists y : U . condition(v,y) /\ SecEffect(y)) <=> GiveMed(v)
+			
+	%% check noreflexive
+	forall e : U . Event(e) => not response(e,e) %(noref)% %implied
+	
+	%% check noExecuted
+	forall m,m' : U . Mark(m) /\ Mark(m') => exists n : Nat . (
+	
+		%% no m.(executed + toBeExecuted)
+		(not exists y : U . executed(m,y) \/ toBeExecuted(m,y)) /\
+		
+		%% SecEffect in m'.executed 
+		(forall v : U . SecEffect(v) => exists y : U . m' = y /\ executed(y,v)) /\
+		
+		%% no m'.toBeExecuted
+		(forall v : U . (exists y : U . m' = y /\ toBeExecuted(y,v)) => false) /\
+		
+		%% m' in m.transRun
+		(transRun(n,m,m')) ) => 
+		 
+		%% some m'.executed; the inverse
+		(exists y : U . executed(m',y))
+		%(noExecuted)% %implied
+	
+	%% check badRun
+	. not exists m,m' : U . Mark(m) /\ Mark(m') /\
+		(forall v : U . (exists y : U . y = m /\ (executed(y,v) \/ toBeExecuted(y,v))) => false) /\
+		(forall v : U . (exists y : U . m' = y /\ executed(y,v)) <=> Event(v)) /\
+		(forall v,v' : U . m = v /\ m' = v' => (exists y:U . action(v,v',y) /\ Event(y)))
+		%(badRun)% %implied
+		
+	%% check noDeadlock
+	forall e,e' : U . Event(e) /\ Event(e') => not (
+		(forall v : U . v = e' => exists y : U . e = y /\ condition(y,v)) /\
+		(forall v : U . v = e => exists y : U . e' = y /\ condition(y,v)))
+		%(noDeadlock)% %implied
+
+	%% check noDeadlockTrans
+	. not exists e : U . exists n : Nat . Event(e) /\
+		(forall v : U . v = e => (exists y : U . e = y /\ transCond(n,y,v)))
+		%(noDeadlockTrans)% %implied
+		
+		
+	%% check middleManTrans
+	forall m,m' : U . Mark(m) /\ Mark(m') => 
+	(
+		(%% no m.(executed+toBeExecuted)
+		(forall v : U . (exists y : U . m = y /\ (executed(y,v) \/ toBeExecuted(y,v))) => false) /\
+		
+		%% SecEffect in m'.executed 
+		(forall v : U . SecEffect(v) => exists y : U . m' = y /\ executed(y,v)) /\
+		
+		%% m' in m.transRun
+		(forall v : U . v = m' => exists y : U . y = m /\ exists n : Nat . transRun(n,y,v))) =>
+		
+		(exists m'' : U . Mark(m'') /\ 
+			%% m'' in m.transRun
+			(forall v : U . v = m'' => exists y : U . m = y /\ exists n : Nat . transRun(n,y,v)) /\
+			
+			%% m' in m''.transRun
+			(forall v : U . v = m' => exists y : U . m'' = y /\ exists n : Nat . transRun(n,y,v)) /\
+			
+			%% GiveMed in m'.executed
+			(forall v : U . GiveMed(v) => exists y : U . m' = y /\ executed(y,v)))
+	) %(middleManTrans)% %implied
+	
+	%% consistency checker; proved implies non consistency
+	forall e,e' : U . executed(e,e') %(not consistent)% %implied
+			 			
+end 
